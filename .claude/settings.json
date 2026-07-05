@@ -94,7 +94,9 @@
       "gh *",
       "pnpm add *",
       "pnpm install --frozen-lockfile*",
-      "pnpm --frozen-lockfile install*"
+      "pnpm --frozen-lockfile install*",
+      "pnpm test:e2e*",
+      "pnpm exec playwright test*"
     ]
   }
 }
