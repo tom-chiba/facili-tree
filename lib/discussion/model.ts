@@ -1,7 +1,7 @@
 // 議論マップ（2c 対立ボード）のドメインロジック。
 // すべて副作用のない純粋関数として実装し、React から独立して単体テストできるようにする。
 
-import type { Rationale, Statement, Topic } from "./types";
+import type { Discussion, Participant, Rationale, Statement, Topic } from "./types";
 
 // ---- ID 生成 ---------------------------------------------------------------
 
@@ -13,87 +13,11 @@ export function newId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-// ---- シードデータ -----------------------------------------------------------
+// ---- 初期状態 ---------------------------------------------------------------
 
-function mk(text: string, rationaleTexts: string[] = []): Statement {
-  return {
-    id: newId("s"),
-    text,
-    opposesIds: [],
-    rationales: rationaleTexts.map((t) => ({ id: newId("r"), text: t })),
-  };
-}
-
-/** a と b を対立関係で結ぶ（対称に双方へ張る）。 */
-function link(a: Statement, b: Statement): void {
-  a.opposesIds.push(b.id);
-  b.opposesIds.push(a.id);
-}
-
-/** anchor に対して複数の opponents を対立関係で結ぶ（多対立、対称）。 */
-function linkGroup(anchor: Statement, opponents: Statement[]): void {
-  for (const o of opponents) link(anchor, o);
-}
-
-/**
- * 初期表示用のサンプル議論（新オフィス フリーアドレス導入 検討会）を生成する。
- * ID は生成のたびに変わるため、永続データが無いときのみ使用する。
- */
-export function seedTopics(): Topic[] {
-  const s1 = mk("フリーアドレスにして部署間の交流を増やすべき", [
-    "他部署との接点が増えるほど新規提案が生まれやすいという社内調査結果がある",
-  ]);
-  const s2 = mk("チーム単位で島を作った方が連携が取りやすい", [
-    "プロジェクト資料や機材をすぐ使える状態にしておきたい",
-    "急な相談がしやすく、意思決定が速い",
-  ]);
-  link(s1, s2);
-  const s3 = mk("在宅日が多い人は固定席自体が不要では");
-  const s3a = mk("固定席は毎日出社するメンバーの安心感につながる");
-  const s3b = mk("毎日出社する人ほど固定席への要望が強いという声がある", [
-    "アンケートで固定席希望が7割を占めた",
-  ]);
-  link(s3a, s3b);
-
-  const s4 = mk("座席数を減らして賃料を下げるべき");
-  const s5 = mk("将来の増員を見据えて座席は減らさない方がいい", [
-    "来期に中途採用を10名程度予定している",
-  ]);
-  link(s4, s5);
-  const s5b = mk("フリーアドレスなら座席を減らしても困らないはず");
-  const s5c = mk("来客対応スペースを削ると商談の印象が悪くなる", [
-    "先方オフィス訪問時の第一印象に関わるという声がある",
-  ]);
-  linkGroup(s4, [s5b, s5c]);
-
-  const s6 = mk("来期の異動と同時に一括導入すべき");
-  const s7 = mk("リスクを抑えるため一部フロアから先行導入すべき", [
-    "過去のシステム移行で全社一斉導入により混乱した経験がある",
-  ]);
-  link(s6, s7);
-  const s8 = mk("研修期間を考えると年度末が現実的");
-
-  const b1 = mk("個人ロッカーを増設すべき");
-  const b2 = mk("共有ワゴンで十分", ["備品費を抑えられる"]);
-  link(b1, b2);
-
-  return [
-    {
-      id: newId("t"),
-      name: "座席のルール",
-      statements: [s1, s2, s3, s3a, s3b],
-      subtopics: [
-        {
-          id: newId("t"),
-          name: "荷物・私物の管理ルール",
-          statements: [b1, b2],
-          subtopics: [],
-        },
-      ],
-    },
-    { id: newId("t"), name: "コスト", statements: [s4, s5b, s5c, s5], subtopics: [] },
-    { id: newId("t"), name: "導入スケジュール", statements: [s6, s7, s8], subtopics: [] },
-  ];
+/** 永続データが無いときの初期議論（空）。ユーザーが一から作り始める。 */
+export function emptyDiscussion(): Discussion {
+  return { title: "", participants: [], topics: [] };
 }
 
 // ---- グループ化（対立ペア / 対立なし）--------------------------------------
@@ -323,6 +247,14 @@ export function addConflictStatement(topics: Topic[], statementId: string, text:
   });
 }
 
+/** トップレベルの論点（軸）を末尾に追加する。 */
+export function addTopic(topics: Topic[], name: string): Topic[] {
+  const nm = name.trim();
+  if (!nm) return topics;
+  const newTopic: Topic = { id: newId("t"), name: nm, statements: [], subtopics: [] };
+  return [...topics, newTopic];
+}
+
 /** 指定コンテナに子論点を追加する。 */
 export function addSubtopic(topics: Topic[], containerId: string, name: string): Topic[] {
   const nm = name.trim();
@@ -362,6 +294,23 @@ export function editRationale(
       : s,
   );
 }
+
+// ---- 参加者操作（イミュータブル）------------------------------------------
+
+/** 参加者を末尾に追加する。空名・重複名は追加しない。 */
+export function addParticipant(participants: Participant[], name: string): Participant[] {
+  const nm = name.trim();
+  if (!nm) return participants;
+  if (participants.some((p) => p.name === nm)) return participants;
+  return [...participants, { id: newId("p"), name: nm }];
+}
+
+/** 指定 id の参加者を削除する。 */
+export function removeParticipant(participants: Participant[], id: string): Participant[] {
+  return participants.filter((p) => p.id !== id);
+}
+
+// ---- 根拠操作 ---------------------------------------------------------------
 
 /** 指定根拠を削除する。 */
 export function deleteRationale(
@@ -441,4 +390,24 @@ function normalizeTopic(raw: unknown): Topic {
  */
 export function normalizeTopics(raw: unknown): Topic[] {
   return asArray(raw).map(normalizeTopic);
+}
+
+function normalizeParticipant(raw: unknown): Participant {
+  const o = asObject(raw);
+  return { id: asString(o.id) || newId("p"), name: asString(o.name) };
+}
+
+/**
+ * 永続化された（型が保証されない）議論データを検証して Discussion に整える。
+ * フィールド欠落・型不一致でも例外を出さず既定値で補う。名前が空の参加者は除外する。
+ */
+export function normalizeDiscussion(raw: unknown): Discussion {
+  const o = asObject(raw);
+  return {
+    title: asString(o.title),
+    participants: asArray(o.participants)
+      .map(normalizeParticipant)
+      .filter((p) => p.name !== ""),
+    topics: normalizeTopics(o.topics),
+  };
 }

@@ -1,21 +1,25 @@
 import { describe, expect, test } from "vitest";
 import {
   addConflictStatement,
+  addParticipant,
   addRationale,
   addStatement,
   addSubtopic,
+  addTopic,
   computeGroupModel,
   deleteRationale,
   editRationale,
+  emptyDiscussion,
   findContainer,
   flattenAxisView,
   flattenTopicOptions,
+  normalizeDiscussion,
   normalizeTopics,
   opposesOptionsOf,
-  seedTopics,
+  removeParticipant,
   splitGroupsMulti,
 } from "@/lib/discussion/model";
-import type { Statement, Topic } from "@/lib/discussion/types";
+import type { Participant, Statement, Topic } from "@/lib/discussion/types";
 
 function stmt(id: string, text: string, over: Partial<Statement> = {}): Statement {
   return { id, text, opposesIds: [], rationales: [], ...over };
@@ -332,16 +336,91 @@ describe("normalizeTopics", () => {
   });
 });
 
-describe("seedTopics", () => {
-  test("3つの論点と入れ子・対立ペア・多対立を含む", () => {
-    const topics = seedTopics();
-    expect(topics).toHaveLength(3);
-    expect(topics[0].subtopics).toHaveLength(1);
-    const grouped = computeGroupModel(topics);
-    // 座席のルールには対立ペアがある
-    expect(grouped[0].pairRows.length).toBeGreaterThan(0);
-    // コスト論点には多対立（アンカー1件に相手2件以上）がある
-    const cost = grouped[1];
-    expect(cost.pairRows.some((r) => r.others.length >= 2)).toBe(true);
+describe("addTopic", () => {
+  test("トップレベル論点を末尾に追加する（イミュータブル）", () => {
+    const before = [topic("t1", "既存")];
+    const after = addTopic(before, "新しい論点");
+    expect(after).toHaveLength(2);
+    expect(after[1].name).toBe("新しい論点");
+    expect(after[1].statements).toEqual([]);
+    expect(after[1].subtopics).toEqual([]);
+    // 元は変わらない
+    expect(before).toHaveLength(1);
+  });
+
+  test("空配列にも追加でき、前後の空白は除去される", () => {
+    const after = addTopic([], "  最初の論点  ");
+    expect(after).toHaveLength(1);
+    expect(after[0].name).toBe("最初の論点");
+  });
+
+  test("空名は追加しない", () => {
+    const before: Topic[] = [];
+    expect(addTopic(before, "  ")).toBe(before);
+  });
+});
+
+describe("参加者操作", () => {
+  const base: Participant[] = [{ id: "p1", name: "田中" }];
+
+  test("追加（イミュータブル・前後空白の除去）", () => {
+    const after = addParticipant(base, "  佐藤 ");
+    expect(after.map((p) => p.name)).toEqual(["田中", "佐藤"]);
+    expect(base).toHaveLength(1);
+  });
+
+  test("空名は追加しない", () => {
+    expect(addParticipant(base, "  ")).toBe(base);
+  });
+
+  test("重複名は追加しない", () => {
+    expect(addParticipant(base, "田中")).toBe(base);
+  });
+
+  test("id で削除できる", () => {
+    expect(removeParticipant(base, "p1")).toEqual([]);
+    // 存在しない id では変化なし（新しい配列だが内容は同じ）
+    expect(removeParticipant(base, "none")).toEqual(base);
+  });
+});
+
+describe("emptyDiscussion", () => {
+  test("空のタイトル・参加者・論点を返す", () => {
+    expect(emptyDiscussion()).toEqual({ title: "", participants: [], topics: [] });
+  });
+});
+
+describe("normalizeDiscussion", () => {
+  test("欠落フィールドを既定値で補う", () => {
+    const d = normalizeDiscussion({});
+    expect(d).toEqual({ title: "", participants: [], topics: [] });
+  });
+
+  test("非オブジェクト入力でも空の議論を返す", () => {
+    expect(normalizeDiscussion(null)).toEqual({ title: "", participants: [], topics: [] });
+    expect(normalizeDiscussion("garbage")).toEqual({ title: "", participants: [], topics: [] });
+  });
+
+  test("title・participants・topics を検証して整える", () => {
+    const d = normalizeDiscussion({
+      title: "議論X",
+      participants: [
+        { id: "p1", name: "田中" },
+        { id: "p2", name: "" }, // 名前が空の参加者は除外される
+        { name: "佐藤" }, // id 欠落は補完される
+      ],
+      topics: [{ id: "t1", name: "論点", statements: [{ id: "s1", text: "x" }] }],
+    });
+    expect(d.title).toBe("議論X");
+    expect(d.participants.map((p) => p.name)).toEqual(["田中", "佐藤"]);
+    expect(d.participants[1].id).toBeTruthy();
+    expect(d.topics[0].statements[0].opposesIds).toEqual([]);
+  });
+
+  test("不正な型でも例外を出さず既定値に整える", () => {
+    const d = normalizeDiscussion({ title: 123, participants: "notarray", topics: {} });
+    expect(d.title).toBe("");
+    expect(d.participants).toEqual([]);
+    expect(d.topics).toEqual([]);
   });
 });

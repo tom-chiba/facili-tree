@@ -26,3 +26,21 @@ export type Topic = {
   statements: Statement[];
   subtopics: Topic[];
 };
+
+/** 議論の参加者。ヘッダーのアバター列に表示する。意見への紐付けは持たない。 */
+export type Participant = {
+  id: string;
+  name: string;
+};
+
+/**
+ * 議論（Discussion）。UI に表示される議論全体の状態を1つのまとまりとして持つ。
+ * - title: 議論のタイトル（空文字は「無題」として扱う）
+ * - participants: 参加者のアバター列
+ * - topics: 論点ツリー
+ */
+export type Discussion = {
+  title: string;
+  participants: Participant[];
+  topics: Topic[];
+};
