@@ -2,10 +2,10 @@ import { render, screen } from "@testing-library/react";
 import { expect, test } from "vitest";
 import Home from "@/app/page";
 
-test("トップページに見出しが表示される", () => {
+test("トップページに議論ボードのタイトルが表示される", async () => {
   render(<Home />);
 
-  const heading = screen.getByRole("heading", { level: 1 });
-  expect(heading).toBeInTheDocument();
-  expect(heading).toHaveTextContent("To get started, edit the page.tsx file.");
+  expect(
+    await screen.findByRole("heading", { name: "新オフィス フリーアドレス導入 検討会" }),
+  ).toBeInTheDocument();
 });
