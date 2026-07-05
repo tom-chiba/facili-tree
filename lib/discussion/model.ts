@@ -394,7 +394,7 @@ export function normalizeTopics(raw: unknown): Topic[] {
 
 function normalizeParticipant(raw: unknown): Participant {
   const o = asObject(raw);
-  return { id: asString(o.id) || newId("p"), name: asString(o.name) };
+  return { id: asString(o.id) || newId("p"), name: asString(o.name).trim() };
 }
 
 /**

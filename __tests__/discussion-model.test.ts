@@ -423,4 +423,15 @@ describe("normalizeDiscussion", () => {
     expect(d.participants).toEqual([]);
     expect(d.topics).toEqual([]);
   });
+
+  test("空白のみの参加者名は trim され除外される", () => {
+    const d = normalizeDiscussion({
+      participants: [
+        { id: "p1", name: "   " },
+        { id: "p2", name: "  田中  " },
+      ],
+    });
+    // 空白のみは除外、前後空白は trim される
+    expect(d.participants.map((p) => p.name)).toEqual(["田中"]);
+  });
 });

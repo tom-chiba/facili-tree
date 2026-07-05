@@ -68,9 +68,12 @@ export function ConflictBoard() {
     return node ? opposesOptionsOf(node) : [];
   }, [nodeById, currentTopicId]);
 
-  // ---- トピック（論点ツリー）の更新は discussion.topics を差し替える ----
+  // ---- 状態更新はすべてこの2ヘルパ経由（null ガードと不変更新を集約）----
+  function updateDiscussion(fn: (d: Discussion) => Discussion) {
+    setDiscussion((prev) => (prev ? fn(prev) : prev));
+  }
   function updateTopics(fn: (topics: Topic[]) => Topic[]) {
-    setDiscussion((prev) => (prev ? { ...prev, topics: fn(prev.topics) } : prev));
+    updateDiscussion((d) => ({ ...d, topics: fn(d.topics) }));
   }
 
   // ---- 変更ハンドラ（すべて model 経由でイミュータブル更新）----
@@ -90,18 +93,15 @@ export function ConflictBoard() {
     updateTopics((t) => addConflictStatement(t, statementId, text));
   }
 
+  // タイトルの正規化（trim）は他フィールド（addTopic / addParticipant）と同じくハンドラ境界で行う。
   function handleChangeTitle(title: string) {
-    setDiscussion((prev) => (prev ? { ...prev, title } : prev));
+    updateDiscussion((d) => ({ ...d, title: title.trim() }));
   }
   function handleAddParticipant(name: string) {
-    setDiscussion((prev) =>
-      prev ? { ...prev, participants: addParticipant(prev.participants, name) } : prev,
-    );
+    updateDiscussion((d) => ({ ...d, participants: addParticipant(d.participants, name) }));
   }
   function handleRemoveParticipant(id: string) {
-    setDiscussion((prev) =>
-      prev ? { ...prev, participants: removeParticipant(prev.participants, id) } : prev,
-    );
+    updateDiscussion((d) => ({ ...d, participants: removeParticipant(d.participants, id) }));
   }
 
   function submitTopic() {

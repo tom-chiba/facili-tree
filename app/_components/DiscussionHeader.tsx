@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Participant } from "@/lib/discussion/types";
-import { cancelBtnStyle, colors, darkBtnStyle, participantColor } from "./ui";
+import { cancelBtnStyle, colors, darkBtnStyle, inlineInputStyle, participantColor } from "./ui";
 
 /** タイトル未設定時にヘッダーへ表示するプレースホルダ見出し。 */
 export const UNTITLED = "無題の議論";
@@ -37,16 +37,24 @@ export function DiscussionHeader({
   const [titleDraft, setTitleDraft] = useState("");
   const [addingParticipant, setAddingParticipant] = useState(false);
   const [participantDraft, setParticipantDraft] = useState("");
+  // Escape 取消時に input のアンマウントで onBlur が発火しても確定させないためのガード。
+  const skipCommitRef = useRef(false);
 
   function startEditTitle() {
     setTitleDraft(title);
     setEditingTitle(true);
   }
   function commitTitle() {
-    onChangeTitle(titleDraft.trim());
+    if (skipCommitRef.current) {
+      skipCommitRef.current = false;
+      return;
+    }
+    // trim などの正規化はハンドラ（onChangeTitle）側で行う。ここでは生の draft を渡す。
+    onChangeTitle(titleDraft);
     setEditingTitle(false);
   }
   function cancelTitle() {
+    skipCommitRef.current = true;
     setEditingTitle(false);
     setTitleDraft("");
   }
@@ -88,13 +96,11 @@ export function DiscussionHeader({
           <input
             aria-label="議論タイトルを編集"
             style={{
-              flex: 1,
+              ...inlineInputStyle,
               minWidth: 0,
               fontSize: 15,
               fontWeight: 600,
               padding: "4px 8px",
-              border: `1px solid ${colors.link}`,
-              borderRadius: 5,
               color: colors.ink,
             }}
             placeholder="議論のタイトルを入力…"
@@ -201,14 +207,7 @@ export function DiscussionHeader({
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <input
               aria-label="参加者名を入力"
-              style={{
-                width: 96,
-                fontSize: 11,
-                padding: "5px 8px",
-                border: `1px solid ${colors.link}`,
-                borderRadius: 5,
-                color: colors.text,
-              }}
+              style={{ ...inlineInputStyle, flex: "none", width: 96, padding: "5px 8px" }}
               placeholder="参加者名…"
               value={participantDraft}
               onChange={(e) => setParticipantDraft(e.target.value)}
