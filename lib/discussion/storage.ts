@@ -5,17 +5,16 @@ import type { Topic } from "./types";
 const STORAGE_KEY = "facili-tree:discussion:v2";
 
 /**
- * 永続化された議論データを読み込む。
- * SSR 環境やデータ不在・破損時は null を返す（呼び出し側でシードにフォールバックする）。
+ * 永続化された議論データの生の値（パース結果）を返す。
+ * 形状は保証しない（呼び出し側で normalizeTopics により検証・整形する）。
+ * SSR 環境・データ不在・パース失敗時は null を返す。
  */
-export function loadTopics(): Topic[] | null {
+export function loadTopics(): unknown {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    return parsed as Topic[];
+    return JSON.parse(raw);
   } catch {
     return null;
   }

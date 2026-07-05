@@ -47,10 +47,10 @@ export function ConflictBoard() {
   const [topics, setTopics] = useState<Topic[] | null>(null);
   const [form, setForm] = useState<Form>({ topic: "", text: "", opposes: "", rationale: "" });
 
-  // マウント後に永続データを読み込む（無ければシード）。読み込みデータは正規化する。
+  // マウント後に永続データを読み込む。生値を検証・正規化し、無効／空ならシードにフォールバックする。
   useEffect(() => {
-    const loaded = loadTopics();
-    setTopics(loaded ? normalizeTopics(loaded) : seedTopics());
+    const loaded = normalizeTopics(loadTopics());
+    setTopics(loaded.length > 0 ? loaded : seedTopics());
   }, []);
 
   // 変更のたびに永続化する。

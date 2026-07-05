@@ -62,6 +62,34 @@ export const saveBtnStyle: CSSProperties = {
   cursor: "pointer",
 };
 
+/** 小サイズの取消ボタン（根拠編集・対立追加フォーム共用）。 */
+export const smallCancelBtnStyle: CSSProperties = {
+  ...cancelBtnStyle,
+  fontSize: 9.5,
+  padding: "3px 8px",
+};
+
+/** 小サイズ・赤枠の入力欄（根拠編集・対立追加フォーム共用の基底）。width/flex は呼び出し側で指定。 */
+export const smallConflictInputStyle: CSSProperties = {
+  fontSize: 10,
+  padding: "4px 7px",
+  border: `1px solid ${colors.conflict}`,
+  borderRadius: 5,
+  color: colors.text,
+};
+
+/** 小サイズ・赤背景の確定ボタン（対立追加）。 */
+export const smallConflictBtnStyle: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 700,
+  padding: "3px 8px",
+  borderRadius: 5,
+  border: "none",
+  background: colors.conflict,
+  color: "#fff",
+  cursor: "pointer",
+};
+
 /** 対立相手セレクトの見た目（赤系）。 */
 export const opposesSelectStyle: CSSProperties = {
   fontSize: 12,

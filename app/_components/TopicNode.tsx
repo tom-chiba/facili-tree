@@ -11,6 +11,9 @@ import {
   inlineBoxStyle,
   inlineInputStyle,
   linkBtnStyle,
+  smallCancelBtnStyle,
+  smallConflictBtnStyle,
+  smallConflictInputStyle,
 } from "./ui";
 
 export type RationaleHandlers = {
@@ -209,39 +212,19 @@ export function TopicNode({
                 <div style={{ display: "flex", gap: 6, alignItems: "center", paddingTop: 6 }}>
                   <input
                     aria-label="対立する意見を入力"
-                    style={{
-                      width: 160,
-                      fontSize: 10,
-                      padding: "4px 7px",
-                      border: `1px solid ${colors.conflict}`,
-                      borderRadius: 5,
-                      color: colors.text,
-                    }}
+                    style={{ ...smallConflictInputStyle, width: 160 }}
                     placeholder="対立する意見を入力…"
                     value={conflictDraft}
                     onChange={(e) => setConflictDraft(e.target.value)}
                   />
                   <button
                     type="button"
-                    style={{
-                      fontSize: 9.5,
-                      fontWeight: 700,
-                      padding: "3px 8px",
-                      borderRadius: 5,
-                      border: "none",
-                      background: colors.conflict,
-                      color: "#fff",
-                      cursor: "pointer",
-                    }}
+                    style={smallConflictBtnStyle}
                     onClick={() => submitConflict(s.id)}
                   >
                     追加
                   </button>
-                  <button
-                    type="button"
-                    style={{ ...cancelBtnStyle, fontSize: 9.5, padding: "3px 8px" }}
-                    onClick={resetConflict}
-                  >
+                  <button type="button" style={smallCancelBtnStyle} onClick={resetConflict}>
                     取消
                   </button>
                 </div>

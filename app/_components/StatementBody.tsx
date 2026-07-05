@@ -2,20 +2,13 @@
 
 import { useState } from "react";
 import type { Statement } from "@/lib/discussion/types";
-import { cancelBtnStyle, colors, saveBtnStyle } from "./ui";
+import { colors, saveBtnStyle, smallCancelBtnStyle, smallConflictInputStyle } from "./ui";
 
-const editInputStyle: React.CSSProperties = {
-  flex: 1,
-  fontSize: 10,
-  padding: "4px 7px",
-  border: `1px solid ${colors.conflict}`,
-  borderRadius: 5,
-  color: colors.text,
-};
+const editInputStyle: React.CSSProperties = { ...smallConflictInputStyle, flex: 1 };
 
 // StatementBody 内の保存/取消は小サイズ（9.5px）。
 const smallSave = saveBtnStyle;
-const smallCancel: React.CSSProperties = { ...cancelBtnStyle, fontSize: 9.5, padding: "3px 8px" };
+const smallCancel = smallCancelBtnStyle;
 
 type Props = {
   statement: Statement;

@@ -26,12 +26,7 @@ describe("loadTopics", () => {
     expect(loadTopics()).toBeNull();
   });
 
-  test("配列でなければ null にフォールバック", () => {
-    localStorage.setItem(KEY, JSON.stringify({ foo: 1 }));
-    expect(loadTopics()).toBeNull();
-  });
-
-  test("保存した内容を復元できる", () => {
+  test("保存した内容（生値）を復元できる", () => {
     saveTopics(sample);
     expect(loadTopics()).toEqual(sample);
   });

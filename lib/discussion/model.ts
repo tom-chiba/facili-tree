@@ -175,7 +175,8 @@ export function computeGroupModel(topics: Topic[]): GroupedTopic[] {
 
 // ---- 平坦化（描画用）-------------------------------------------------------
 
-export type FlatNode = GroupedTopic & {
+// 平坦化後は各ノードを独立した表示単位として扱うため、入れ子（subtopics）は保持しない。
+export type FlatNode = Omit<GroupedTopic, "subtopics"> & {
   depth: number;
   isSub: boolean;
   dispName: string;
@@ -185,9 +186,10 @@ export type FlatNode = GroupedTopic & {
 export function flattenAxisView(nodes: GroupedTopic[], depth = 0): FlatNode[] {
   const out: FlatNode[] = [];
   for (const n of nodes) {
+    const { subtopics, ...rest } = n;
     const isSub = depth > 0;
-    out.push({ ...n, depth, isSub, dispName: isSub ? `└ ${n.name}` : n.name });
-    out.push(...flattenAxisView(n.subtopics, depth + 1));
+    out.push({ ...rest, depth, isSub, dispName: isSub ? `└ ${n.name}` : n.name });
+    out.push(...flattenAxisView(subtopics, depth + 1));
   }
   return out;
 }
@@ -209,15 +211,33 @@ export function flattenTopicOptions(topics: Topic[], depth = 0): TopicOption[] {
 
 export type OpposesOption = { id: string; text: string };
 
-/** 指定した論点内の意見を、対立相手セレクトの選択肢（短縮テキスト）にする。 */
+/**
+ * 対立先として安全に選べる意見の id 集合を返す。
+ * 表示モデルは「1クラスタ＝1アンカー対複数」のスター型を前提とするため、
+ * 対立なし（single）または既存クラスタのアンカーのみを候補とする。
+ * 葉（アンカー以外の対立中の意見）を対立先にすると非スター型クラスタが生じ、
+ * 実在しない対立関係が描画されてしまうため除外する。
+ */
+function safeConflictTargetIds(statements: Statement[]): Set<string> {
+  const { pairRows, singles } = splitGroupsMulti(statements);
+  const ids = new Set<string>();
+  for (const s of singles) ids.add(s.id);
+  for (const row of pairRows) ids.add(row.a.id);
+  return ids;
+}
+
+/** 指定した論点内で対立先に選べる意見を、セレクトの選択肢（短縮テキスト）にする。 */
 export function optsFor(topics: Topic[], topicId: string | null): OpposesOption[] {
   if (!topicId) return [];
   const t = findContainer(topics, topicId);
   if (!t) return [];
-  return t.statements.map((s) => ({
-    id: s.id,
-    text: s.text.length > 18 ? `${s.text.slice(0, 18)}…` : s.text,
-  }));
+  const allowed = safeConflictTargetIds(t.statements);
+  return t.statements
+    .filter((s) => allowed.has(s.id))
+    .map((s) => ({
+      id: s.id,
+      text: s.text.length > 18 ? `${s.text.slice(0, 18)}…` : s.text,
+    }));
 }
 
 // ---- ツリー操作（イミュータブル）------------------------------------------
@@ -367,22 +387,50 @@ export function deleteRationale(
   );
 }
 
-// ---- 正規化（永続データ読み込み時の防御）-----------------------------------
+// ---- 正規化（永続データ読み込み時の検証）-----------------------------------
+
+type RawObject = Record<string, unknown>;
+
+function asObject(v: unknown): RawObject {
+  return typeof v === "object" && v !== null ? (v as RawObject) : {};
+}
+function asArray(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : [];
+}
+function asString(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+function asStringArray(v: unknown): string[] {
+  return asArray(v).filter((x): x is string => typeof x === "string");
+}
+
+function normalizeStatement(raw: unknown): Statement {
+  const o = asObject(raw);
+  return {
+    id: asString(o.id) || newId("s"),
+    text: asString(o.text),
+    opposesIds: asStringArray(o.opposesIds),
+    rationales: asArray(o.rationales).map((r) => {
+      const ro = asObject(r);
+      return { id: asString(ro.id) || newId("r"), text: asString(ro.text) };
+    }),
+  };
+}
+
+function normalizeTopic(raw: unknown): Topic {
+  const o = asObject(raw);
+  return {
+    id: asString(o.id) || newId("t"),
+    name: asString(o.name),
+    statements: asArray(o.statements).map(normalizeStatement),
+    subtopics: asArray(o.subtopics).map(normalizeTopic),
+  };
+}
 
 /**
- * 永続化された（あるいは古いスキーマの）データを安全な形へ整える。
- * opposesIds / rationales / subtopics の欠落を埋め、後続の純粋関数が例外を出さないようにする。
+ * 永続化された（型が保証されない）データを検証して Topic[] に整える。
+ * 配列でない・フィールド欠落・型不一致でも例外を出さず、既定値で補う。
  */
-export function normalizeTopics(topics: Topic[]): Topic[] {
-  return topics.map((t) => ({
-    id: t.id,
-    name: t.name,
-    statements: (t.statements ?? []).map((s) => ({
-      id: s.id,
-      text: s.text,
-      opposesIds: Array.isArray(s.opposesIds) ? s.opposesIds : [],
-      rationales: Array.isArray(s.rationales) ? s.rationales : [],
-    })),
-    subtopics: normalizeTopics(t.subtopics ?? []),
-  }));
+export function normalizeTopics(raw: unknown): Topic[] {
+  return asArray(raw).map(normalizeTopic);
 }

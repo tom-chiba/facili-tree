@@ -228,6 +228,20 @@ describe("表示用ユーティリティ", () => {
     expect(opts[1].text).toBe("短い");
   });
 
+  test("optsFor は対立先候補を single とアンカーのみに絞る（葉は除外）", () => {
+    // a(アンカー) ↔ b,c（葉2件） + d(single)
+    const topics = [
+      topic("t1", "論点1", [
+        stmt("a", "A", { opposesIds: ["b", "c"] }),
+        stmt("b", "B", { opposesIds: ["a"] }),
+        stmt("c", "C", { opposesIds: ["a"] }),
+        stmt("d", "D"),
+      ]),
+    ];
+    // 葉 b,c は候補から外れ、アンカー a と single d のみ
+    expect(optsFor(topics, "t1").map((o) => o.id)).toEqual(["a", "d"]);
+  });
+
   test("optsFor は topicId が null や不明なら空配列", () => {
     const topics = [topic("t1", "論点1", [stmt("s1", "x")])];
     expect(optsFor(topics, null)).toEqual([]);
@@ -246,13 +260,25 @@ describe("表示用ユーティリティ", () => {
 
 describe("normalizeTopics", () => {
   test("欠落した opposesIds / rationales / subtopics を補う", () => {
-    const broken = [
-      { id: "t1", name: "論点1", statements: [{ id: "s1", text: "x" }] },
-    ] as unknown as Topic[];
+    const broken: unknown = [{ id: "t1", name: "論点1", statements: [{ id: "s1", text: "x" }] }];
     const normalized = normalizeTopics(broken);
     expect(normalized[0].statements[0].opposesIds).toEqual([]);
     expect(normalized[0].statements[0].rationales).toEqual([]);
     expect(normalized[0].subtopics).toEqual([]);
+  });
+
+  test("配列でない入力は空配列を返す", () => {
+    expect(normalizeTopics(null)).toEqual([]);
+    expect(normalizeTopics({ foo: 1 })).toEqual([]);
+    expect(normalizeTopics("garbage")).toEqual([]);
+  });
+
+  test("不正な要素型でも例外を出さず既定値で整える", () => {
+    const messy: unknown = [
+      { id: "t1", name: "論点", statements: [{ id: "s1", text: "x", opposesIds: "notarray" }] },
+    ];
+    const normalized = normalizeTopics(messy);
+    expect(normalized[0].statements[0].opposesIds).toEqual([]);
   });
 });
 
