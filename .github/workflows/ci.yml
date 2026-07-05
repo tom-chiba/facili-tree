@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+  # main への push でも実行（マージ後の main を継続的に検証する）
+  push:
+    branches: [main]
+
+# 同一 PR / ブランチで新しい push があれば実行中のジョブをキャンセルする
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # mise.toml と揃える
+  NODE_VERSION: "24.18.0"
+  PNPM_VERSION: "11.10.0"
+
+jobs:
+  # 静的チェック + ユニット/コンポーネントテスト（Vitest + RTL）
+  quality:
+    name: Lint & Unit test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Unit test (Vitest)
+        run: pnpm test
+
+  # E2E テスト（Playwright）
+  e2e:
+    name: E2E test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Playwright のバージョンに紐づくブラウザをキャッシュする
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | sed 's/Version //')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      # キャッシュヒット時もシステム依存だけは入れておく
+      - name: Install Playwright system deps
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      - name: Run Playwright tests
+        run: pnpm exec playwright test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
