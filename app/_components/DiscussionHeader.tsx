@@ -107,25 +107,40 @@ export function DiscussionHeader({
             onBlur={commitTitle}
           />
         ) : (
-          <h1 style={{ margin: 0, minWidth: 0 }}>
+          <>
+            {/* h1 のアクセシブル名をタイトル自体にする（編集操作は隣の鉛筆ボタンに分離） */}
+            <h1
+              style={{
+                margin: 0,
+                minWidth: 0,
+                fontSize: 15,
+                fontWeight: 600,
+                color: title ? colors.ink : "#9b988f",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {title || UNTITLED}
+            </h1>
             <button
               type="button"
               aria-label="タイトルを編集"
+              title="タイトルを編集"
               style={{
+                flex: "none",
                 border: "none",
                 background: "none",
-                padding: 0,
+                padding: 2,
                 cursor: "pointer",
-                fontSize: 15,
-                fontWeight: 600,
-                textAlign: "left",
-                color: title ? colors.ink : "#9b988f",
+                fontSize: 12,
+                color: colors.muted,
               }}
               onClick={startEditTitle}
             >
-              {title || UNTITLED}
+              ✎
             </button>
-          </h1>
+          </>
         )}
       </div>
 
