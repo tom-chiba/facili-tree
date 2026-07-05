@@ -18,6 +18,8 @@
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+# playwright-cli（対話的動作確認時のスナップショット出力）
+/.playwright-cli/
 
 # next.js
 /.next/
