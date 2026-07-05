@@ -126,12 +126,14 @@ export function splitGroupsMulti(statements: Statement[]): StatementGroups {
     if (visited.has(start.id)) continue;
 
     // start を含む連結成分（クラスタ）を幅優先で収集する。
+    // visited を参照することで、非対称な opposesIds（改竄・旧データ由来）でも
+    // 既に他クラスタに割り当て済みの意見を二重に取り込まないようにする。
     const clusterIds = new Set<string>([start.id]);
     const queue = [start];
     while (queue.length > 0) {
       const cur = queue.shift() as Statement;
       for (const oid of cur.opposesIds) {
-        if (!clusterIds.has(oid) && byId.has(oid)) {
+        if (!clusterIds.has(oid) && !visited.has(oid) && byId.has(oid)) {
           clusterIds.add(oid);
           queue.push(byId.get(oid) as Statement);
         }
@@ -211,33 +213,20 @@ export function flattenTopicOptions(topics: Topic[], depth = 0): TopicOption[] {
 
 export type OpposesOption = { id: string; text: string };
 
+function toOpposesOption(s: Statement): OpposesOption {
+  return { id: s.id, text: s.text.length > 18 ? `${s.text.slice(0, 18)}…` : s.text };
+}
+
 /**
- * 対立先として安全に選べる意見の id 集合を返す。
+ * グループ化済みの意見群から、対立先として安全に選べる選択肢を導出する。
  * 表示モデルは「1クラスタ＝1アンカー対複数」のスター型を前提とするため、
  * 対立なし（single）または既存クラスタのアンカーのみを候補とする。
  * 葉（アンカー以外の対立中の意見）を対立先にすると非スター型クラスタが生じ、
  * 実在しない対立関係が描画されてしまうため除外する。
+ * グループ化は FlatNode で計算済みのものを再利用でき、木の再探索・再グループ化を避けられる。
  */
-function safeConflictTargetIds(statements: Statement[]): Set<string> {
-  const { pairRows, singles } = splitGroupsMulti(statements);
-  const ids = new Set<string>();
-  for (const s of singles) ids.add(s.id);
-  for (const row of pairRows) ids.add(row.a.id);
-  return ids;
-}
-
-/** 指定した論点内で対立先に選べる意見を、セレクトの選択肢（短縮テキスト）にする。 */
-export function optsFor(topics: Topic[], topicId: string | null): OpposesOption[] {
-  if (!topicId) return [];
-  const t = findContainer(topics, topicId);
-  if (!t) return [];
-  const allowed = safeConflictTargetIds(t.statements);
-  return t.statements
-    .filter((s) => allowed.has(s.id))
-    .map((s) => ({
-      id: s.id,
-      text: s.text.length > 18 ? `${s.text.slice(0, 18)}…` : s.text,
-    }));
+export function opposesOptionsOf(groups: StatementGroups): OpposesOption[] {
+  return [...groups.pairRows.map((row) => row.a), ...groups.singles].map(toOpposesOption);
 }
 
 // ---- ツリー操作（イミュータブル）------------------------------------------
@@ -417,12 +406,31 @@ function normalizeStatement(raw: unknown): Statement {
   };
 }
 
+/**
+ * 同一コンテナ内の対立関係を修復する。
+ * - 自己参照・同コンテナに存在しない相手（宙吊り参照）を除去する
+ * - 片方向の対立を対称化する（splitGroupsMulti は対称グラフを前提とするため）
+ */
+function repairConflicts(statements: Statement[]): Statement[] {
+  const ids = new Set(statements.map((s) => s.id));
+  const adj = new Map<string, Set<string>>(statements.map((s) => [s.id, new Set<string>()]));
+  for (const s of statements) {
+    for (const oid of s.opposesIds) {
+      if (oid !== s.id && ids.has(oid)) {
+        adj.get(s.id)?.add(oid);
+        adj.get(oid)?.add(s.id);
+      }
+    }
+  }
+  return statements.map((s) => ({ ...s, opposesIds: [...(adj.get(s.id) ?? [])] }));
+}
+
 function normalizeTopic(raw: unknown): Topic {
   const o = asObject(raw);
   return {
     id: asString(o.id) || newId("t"),
     name: asString(o.name),
-    statements: asArray(o.statements).map(normalizeStatement),
+    statements: repairConflicts(asArray(o.statements).map(normalizeStatement)),
     subtopics: asArray(o.subtopics).map(normalizeTopic),
   };
 }

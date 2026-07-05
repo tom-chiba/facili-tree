@@ -6,10 +6,6 @@ import { colors, saveBtnStyle, smallCancelBtnStyle, smallConflictInputStyle } fr
 
 const editInputStyle: React.CSSProperties = { ...smallConflictInputStyle, flex: 1 };
 
-// StatementBody 内の保存/取消は小サイズ（9.5px）。
-const smallSave = saveBtnStyle;
-const smallCancel = smallCancelBtnStyle;
-
 type Props = {
   statement: Statement;
   onAddRationale: (statementId: string, text: string) => void;
@@ -90,10 +86,10 @@ export function StatementBody({
                     onChange={(e) => setDraft(e.target.value)}
                     aria-label="根拠を編集"
                   />
-                  <button type="button" style={smallSave} onClick={save}>
+                  <button type="button" style={saveBtnStyle} onClick={save}>
                     保存
                   </button>
-                  <button type="button" style={smallCancel} onClick={cancel}>
+                  <button type="button" style={smallCancelBtnStyle} onClick={cancel}>
                     取消
                   </button>
                 </div>
@@ -155,10 +151,10 @@ export function StatementBody({
             onChange={(e) => setDraft(e.target.value)}
             aria-label="根拠を入力"
           />
-          <button type="button" style={smallSave} onClick={save}>
+          <button type="button" style={saveBtnStyle} onClick={save}>
             保存
           </button>
-          <button type="button" style={smallCancel} onClick={cancel}>
+          <button type="button" style={smallCancelBtnStyle} onClick={cancel}>
             取消
           </button>
         </div>

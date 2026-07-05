@@ -11,7 +11,7 @@ import {
   flattenAxisView,
   flattenTopicOptions,
   normalizeTopics,
-  optsFor,
+  opposesOptionsOf,
   seedTopics,
   splitGroupsMulti,
 } from "@/lib/discussion/model";
@@ -75,6 +75,17 @@ describe("splitGroupsMulti", () => {
     expect(g.pairRows[0].a.id).toBe("a");
     expect(g.pairRows[0].others.map((s) => s.id).sort()).toEqual(["b", "c"]);
     expect(g.singles).toHaveLength(0);
+  });
+
+  test("非対称な opposesIds でも意見を二重に取り込まない", () => {
+    // A→B の片方向のみ（B は A を参照しない）。BFS の visited ガードで二重取り込みを防ぐ
+    const g = splitGroupsMulti([stmt("b", "B"), stmt("a", "A", { opposesIds: ["b"] })]);
+    const seen = [
+      ...g.pairRows.flatMap((r) => [r.a.id, ...r.others.map((o) => o.id)]),
+      ...g.singles.map((s) => s.id),
+    ];
+    // b は1回だけ現れる
+    expect(seen.filter((id) => id === "b")).toHaveLength(1);
   });
 });
 
@@ -219,33 +230,26 @@ describe("表示用ユーティリティ", () => {
     expect(opts[1].name).toContain("└ 子");
   });
 
-  test("optsFor は論点内の意見を短縮テキストで返す", () => {
+  test("opposesOptionsOf は意見を短縮テキストで返す", () => {
     const long = "あ".repeat(30);
-    const topics = [topic("t1", "論点1", [stmt("s1", long), stmt("s2", "短い")])];
-    const opts = optsFor(topics, "t1");
+    const opts = opposesOptionsOf(splitGroupsMulti([stmt("s1", long), stmt("s2", "短い")]));
     expect(opts.map((o) => o.id)).toEqual(["s1", "s2"]);
     expect(opts[0].text.endsWith("…")).toBe(true);
     expect(opts[1].text).toBe("短い");
   });
 
-  test("optsFor は対立先候補を single とアンカーのみに絞る（葉は除外）", () => {
+  test("opposesOptionsOf は対立先候補を single とアンカーのみに絞る（葉は除外）", () => {
     // a(アンカー) ↔ b,c（葉2件） + d(single)
-    const topics = [
-      topic("t1", "論点1", [
+    const opts = opposesOptionsOf(
+      splitGroupsMulti([
         stmt("a", "A", { opposesIds: ["b", "c"] }),
         stmt("b", "B", { opposesIds: ["a"] }),
         stmt("c", "C", { opposesIds: ["a"] }),
         stmt("d", "D"),
       ]),
-    ];
+    );
     // 葉 b,c は候補から外れ、アンカー a と single d のみ
-    expect(optsFor(topics, "t1").map((o) => o.id)).toEqual(["a", "d"]);
-  });
-
-  test("optsFor は topicId が null や不明なら空配列", () => {
-    const topics = [topic("t1", "論点1", [stmt("s1", "x")])];
-    expect(optsFor(topics, null)).toEqual([]);
-    expect(optsFor(topics, "nope")).toEqual([]);
+    expect(opts.map((o) => o.id)).toEqual(["a", "d"]);
   });
 
   test("flattenAxisView は深さ情報を付与する", () => {
@@ -279,6 +283,33 @@ describe("normalizeTopics", () => {
     ];
     const normalized = normalizeTopics(messy);
     expect(normalized[0].statements[0].opposesIds).toEqual([]);
+  });
+
+  test("片方向の対立を対称化する", () => {
+    const raw: unknown = [
+      {
+        id: "t1",
+        name: "論点",
+        statements: [
+          { id: "a", text: "A", opposesIds: ["b"] },
+          { id: "b", text: "B", opposesIds: [] },
+        ],
+      },
+    ];
+    const [t] = normalizeTopics(raw);
+    expect(t.statements.find((s) => s.id === "b")!.opposesIds).toContain("a");
+  });
+
+  test("宙吊り参照と自己参照を除去する", () => {
+    const raw: unknown = [
+      {
+        id: "t1",
+        name: "論点",
+        statements: [{ id: "a", text: "A", opposesIds: ["ghost", "a"] }],
+      },
+    ];
+    const [t] = normalizeTopics(raw);
+    expect(t.statements[0].opposesIds).toEqual([]);
   });
 });
 

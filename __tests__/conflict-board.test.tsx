@@ -13,6 +13,37 @@ async function mountBoard() {
   await screen.findByRole("heading", { name: TITLE });
 }
 
+test("破損した localStorage ではクラッシュせずシードにフォールバックする", async () => {
+  localStorage.setItem(STORAGE_KEY, "{not valid json");
+  await mountBoard();
+  // シードの既知意見が表示される（＝シード経路にフォールバック）
+  expect(screen.getByText("座席数を減らして賃料を下げるべき")).toBeInTheDocument();
+});
+
+test("空配列の localStorage でもシードにフォールバックする", async () => {
+  localStorage.setItem(STORAGE_KEY, "[]");
+  await mountBoard();
+  expect(screen.getByText("座席数を減らして賃料を下げるべき")).toBeInTheDocument();
+});
+
+test("保存済みの非シードデータはシードではなく復元される", async () => {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify([
+      {
+        id: "t1",
+        name: "保存済み論点",
+        statements: [{ id: "s1", text: "保存済み意見", opposesIds: [], rationales: [] }],
+        subtopics: [],
+      },
+    ]),
+  );
+  await mountBoard();
+  expect(screen.getByText("保存済み意見")).toBeInTheDocument();
+  // シードの意見は出ない
+  expect(screen.queryByText("座席数を減らして賃料を下げるべき")).not.toBeInTheDocument();
+});
+
 test("マウント後にシード議論と参加者アバターが表示される", async () => {
   await mountBoard();
   // 論点（フッターの選択肢）

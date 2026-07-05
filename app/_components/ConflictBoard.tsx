@@ -12,7 +12,7 @@ import {
   flattenAxisView,
   flattenTopicOptions,
   normalizeTopics,
-  optsFor,
+  opposesOptionsOf,
   seedTopics,
 } from "@/lib/discussion/model";
 import { loadTopics, saveTopics } from "@/lib/discussion/storage";
@@ -63,11 +63,13 @@ export function ConflictBoard() {
     [topics],
   );
   const topicOptions = useMemo(() => (topics ? flattenTopicOptions(topics) : []), [topics]);
+  // グループ化済みノードを id で引けるようにし、対立候補の再グループ化を避ける。
+  const nodeById = useMemo(() => new Map(flatNodes.map((n) => [n.id, n])), [flatNodes]);
   const currentTopicId = form.topic || topicOptions[0]?.id || "";
-  const footerOpposes = useMemo(
-    () => (topics ? optsFor(topics, currentTopicId) : []),
-    [topics, currentTopicId],
-  );
+  const footerOpposes = useMemo(() => {
+    const node = nodeById.get(currentTopicId);
+    return node ? opposesOptionsOf(node) : [];
+  }, [nodeById, currentTopicId]);
 
   // ---- 変更ハンドラ（すべて model 経由でイミュータブル更新）----
   const rationaleHandlers: RationaleHandlers = {
@@ -193,7 +195,7 @@ export function ConflictBoard() {
               <TopicNode
                 key={node.id}
                 node={node}
-                opposesOptions={optsFor(topics, node.id)}
+                opposesOptions={opposesOptionsOf(node)}
                 onAddStatement={handleAddStatement}
                 onAddSubtopic={handleAddSubtopic}
                 onAddConflict={handleAddConflict}
