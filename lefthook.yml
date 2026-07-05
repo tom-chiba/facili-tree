@@ -1,0 +1,22 @@
+# lefthook 設定
+# - pre-commit: 変更（staged）ファイルのみを高速に整形＋lint
+# - pre-push: 型は全体を見る必要があるため push 前にまとめて typecheck
+# バイナリは node_modules/.bin/ を明示指定する（フック実行シェルの PATH に
+# node_modules/.bin や pnpm が載っているとは限らないため。lefthook は
+# リポジトリルートを cwd にするので相対パスで解決できる）
+
+pre-commit:
+  jobs:
+    # 先に整形して、修正結果を再ステージ（このあとの lint は整形済みを見る）
+    - name: format
+      glob: "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css,scss,md,yaml,yml,toml}"
+      run: node_modules/.bin/oxfmt --write --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+    - name: lint
+      glob: "*.{ts,tsx,js,jsx,mjs,cjs}"
+      run: node_modules/.bin/oxlint {staged_files}
+
+pre-push:
+  jobs:
+    - name: typecheck
+      run: node_modules/.bin/tsc --noEmit

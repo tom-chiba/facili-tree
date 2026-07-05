@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# pnpm (プロジェクトローカルストアが紛れ込んだ場合の保険)
+/.pnpm-store/
+
+# Claude Code（個人ローカル設定は公開しない。共有設定 settings.json / CLAUDE.md は追跡する）
+.claude/settings.local.json

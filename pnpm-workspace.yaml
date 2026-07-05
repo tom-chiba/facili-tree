@@ -1,3 +1,17 @@
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+# リリースから 3 日（4320 分）経過したバージョンのみインストール対象にする
+minimumReleaseAge: 4320
+
+# node_modules 再構築時の確認プロンプトを省略（TTY 無しの実行で中断しないように）
+confirmModulesPurge: false
+
+# 3日制約に抵触する transitive 依存 @emnapi/runtime を成熟版に固定（next→sharp 由来）
+# pnpm 11 から overrides は package.json ではなく本ファイルで指定する
+overrides:
+  "@emnapi/runtime": 1.11.1
+
+# ビルドスクリプト実行の許可（pnpm 11 で ignoredBuiltDependencies を置換）
+# lefthook: postinstall で Git フックを導入するため許可（=フックの自動セットアップ）
+# sharp: プラットフォーム別プリビルドバイナリ @img/sharp-* を使うためビルド不要
+allowBuilds:
+  lefthook: true
+  sharp: false
