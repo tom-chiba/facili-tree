@@ -424,6 +424,11 @@ describe("normalizeDiscussion", () => {
     expect(d.topics).toEqual([]);
   });
 
+  test("title は前後の空白が trim される", () => {
+    expect(normalizeDiscussion({ title: "  会議室ルール  " }).title).toBe("会議室ルール");
+    expect(normalizeDiscussion({ title: "   " }).title).toBe("");
+  });
+
   test("空白のみの参加者名は trim され除外される", () => {
     const d = normalizeDiscussion({
       participants: [

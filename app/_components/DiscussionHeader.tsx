@@ -5,7 +5,7 @@ import type { Participant } from "@/lib/discussion/types";
 import { cancelBtnStyle, colors, darkBtnStyle, inlineInputStyle, participantColor } from "./ui";
 
 /** タイトル未設定時にヘッダーへ表示するプレースホルダ見出し。 */
-export const UNTITLED = "無題の議論";
+const UNTITLED = "無題の議論";
 
 type Props = {
   title: string;
@@ -41,6 +41,9 @@ export function DiscussionHeader({
   const skipCommitRef = useRef(false);
 
   function startEditTitle() {
+    // 前回の Escape 取消で立てたフラグが残っていても、再編集の確定を取りこぼさないよう明示的に解除する
+    // （input アンマウント時に onBlur が発火しないブラウザでの残存対策）。
+    skipCommitRef.current = false;
     setTitleDraft(title);
     setEditingTitle(true);
   }

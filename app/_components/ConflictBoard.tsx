@@ -93,7 +93,8 @@ export function ConflictBoard() {
     updateTopics((t) => addConflictStatement(t, statementId, text));
   }
 
-  // タイトルの正規化（trim）は他フィールド（addTopic / addParticipant）と同じくハンドラ境界で行う。
+  // title は対応するドメイン追加関数を持たないスカラーのため、書き込み時はここで trim する
+  // （読み込み時は normalizeDiscussion が同様に trim する）。
   function handleChangeTitle(title: string) {
     updateDiscussion((d) => ({ ...d, title: title.trim() }));
   }

@@ -404,7 +404,7 @@ function normalizeParticipant(raw: unknown): Participant {
 export function normalizeDiscussion(raw: unknown): Discussion {
   const o = asObject(raw);
   return {
-    title: asString(o.title),
+    title: asString(o.title).trim(),
     participants: asArray(o.participants)
       .map(normalizeParticipant)
       .filter((p) => p.name !== ""),
