@@ -87,13 +87,13 @@ test("入れ子の子論点とその意見がインデント表示される", as
 
 test("多対立が1つのクラスタ内に複数の ⚡ 相手として描画される", async () => {
   await mountBoard();
-  // コスト論点のアンカー（s4）を含む対立ペア行に ⚡ が2つ以上並ぶ
-  const anchor = screen.getByText("座席数を減らして賃料を下げるべき");
-  let row = anchor.parentElement as HTMLElement;
-  while (row.parentElement && within(row).queryAllByText("⚡").length < 2) {
-    row = row.parentElement;
-  }
-  expect(within(row).getAllByText("⚡").length).toBeGreaterThanOrEqual(2);
+  // コスト論点のアンカー（s4）を含む対立ペア行にスコープし、相手3件分の ⚡ が並ぶことを厳密に確認する。
+  // 構造: pairRow > [左列(アンカーのテキスト), 右列(相手 ⚡ 群)]。アンカーのテキスト要素の
+  // 親（左列）→ さらに親が pairRow。
+  const anchorText = screen.getByText("座席数を減らして賃料を下げるべき");
+  const pairRow = anchorText.parentElement?.parentElement as HTMLElement;
+  // s4 は s5b/s5c/s5 の3件と対立（シード）。行内の ⚡ はちょうど3件
+  expect(within(pairRow).getAllByText("⚡")).toHaveLength(3);
 });
 
 test("フッターフォームから意見を追加でき、localStorage に保存される", async () => {
