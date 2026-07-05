@@ -174,6 +174,16 @@ describe("addConflictStatement", () => {
     expect(findContainer(after, "t1a")!.statements).toHaveLength(2);
     expect(findContainer(before, "t1a")!.statements).toHaveLength(1);
   });
+
+  test("追加後に single が対立ペアになる（グループ化で成立）", () => {
+    const before = [topic("t1", "論点1", [stmt("s1", "元意見")])];
+    // 追加前は single
+    expect(splitGroupsMulti(findContainer(before, "t1")!.statements).pairRows).toHaveLength(0);
+    const after = addConflictStatement(before, "s1", "対立意見");
+    const g = splitGroupsMulti(findContainer(after, "t1")!.statements);
+    expect(g.pairRows).toHaveLength(1);
+    expect(g.singles).toHaveLength(0);
+  });
 });
 
 describe("addSubtopic", () => {
@@ -259,6 +269,15 @@ describe("表示用ユーティリティ", () => {
     expect(flat[0].isSub).toBe(false);
     expect(flat[1].isSub).toBe(true);
     expect(flat[1].dispName).toContain("└");
+  });
+
+  test("flattenAxisView は2階層以上でも深さを付与する", () => {
+    const grouped = computeGroupModel([
+      topic("t1", "親", [], [topic("t1a", "子", [], [topic("t1b", "孫")])]),
+    ]);
+    const flat = flattenAxisView(grouped);
+    expect(flat.map((n) => n.id)).toEqual(["t1", "t1a", "t1b"]);
+    expect(flat.map((n) => n.depth)).toEqual([0, 1, 2]);
   });
 });
 

@@ -167,14 +167,47 @@ test("「+ 子論点を追加」で子論点を追加できる", async () => {
   expect((await screen.findAllByText("└ 新規子論点Z")).length).toBeGreaterThan(0);
 });
 
-test("単体意見に「⚡ 対立意見を追加」でインライン対立を追加できる", async () => {
+test("単体意見に「⚡ 対立意見を追加」でインライン対立を追加でき、対立ペアが形成される", async () => {
   await mountBoard();
+  const badgesBefore = screen.getAllByText("⚡").length;
+
   fireEvent.click(screen.getAllByRole("button", { name: "⚡ 対立意見を追加" })[0]);
   fireEvent.change(screen.getByLabelText("対立する意見を入力"), {
     target: { value: "新規対立意見W" },
   });
   fireEvent.click(screen.getAllByRole("button", { name: "追加" })[0]);
+
   expect(await screen.findByText("新規対立意見W")).toBeInTheDocument();
+  // single が対立ペアに変わり ⚡ バッジが1つ増える
+  expect(screen.getAllByText("⚡").length).toBe(badgesBefore + 1);
+});
+
+test("インライン意見追加を取消するとフォームが閉じ、追加されない", async () => {
+  await mountBoard();
+  fireEvent.click(screen.getAllByRole("button", { name: "+ 意見を追加" })[0]);
+  // インラインフォームが開き「意見を入力」が2つ（インライン＋フッター）になる
+  expect(screen.getAllByLabelText("意見を入力").length).toBe(2);
+  fireEvent.change(screen.getAllByLabelText("意見を入力")[0], {
+    target: { value: "取消される意見" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+  // フォームが閉じ、フッターの1つに戻る／内容も追加されない
+  expect(screen.getAllByLabelText("意見を入力").length).toBe(1);
+  expect(screen.queryByText("取消される意見")).not.toBeInTheDocument();
+});
+
+test("根拠追加を取消すると追加されない", async () => {
+  await mountBoard();
+  const opinion = screen.getByText("研修期間を考えると年度末が現実的");
+  const card = opinion.parentElement as HTMLElement;
+
+  fireEvent.click(within(card).getByRole("button", { name: "+ 根拠を追加" }));
+  fireEvent.change(screen.getByLabelText("根拠を入力"), { target: { value: "取消される根拠" } });
+  fireEvent.click(screen.getByRole("button", { name: "取消" }));
+
+  expect(screen.queryByText("・取消される根拠")).not.toBeInTheDocument();
+  // フォームが閉じ「+ 根拠を追加」に戻る
+  expect(within(card).getByRole("button", { name: "+ 根拠を追加" })).toBeInTheDocument();
 });
 
 test("意見に根拠を追加・編集・削除できる", async () => {
