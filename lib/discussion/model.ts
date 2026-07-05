@@ -19,24 +19,20 @@ function mk(text: string, rationaleTexts: string[] = []): Statement {
   return {
     id: newId("s"),
     text,
-    opposes: null,
     opposesIds: [],
     rationales: rationaleTexts.map((t) => ({ id: newId("r"), text: t })),
   };
 }
 
-/** a と b を 1対1 の対立関係で結ぶ。 */
+/** a と b を対立関係で結ぶ（対称に双方へ張る）。 */
 function link(a: Statement, b: Statement): void {
-  a.opposes = b.id;
-  b.opposes = a.id;
+  a.opposesIds.push(b.id);
+  b.opposesIds.push(a.id);
 }
 
-/** anchor に対して複数の opponents を対立関係で結ぶ（多対立）。 */
+/** anchor に対して複数の opponents を対立関係で結ぶ（多対立、対称）。 */
 function linkGroup(anchor: Statement, opponents: Statement[]): void {
-  for (const o of opponents) {
-    anchor.opposesIds.push(o.id);
-    o.opposes = anchor.id;
-  }
+  for (const o of opponents) link(anchor, o);
 }
 
 /**
@@ -115,28 +111,51 @@ export type StatementGroups = {
 };
 
 /**
- * 意見群を「対立ペア」と「対立なし（single）」に分割する。
- * opposes（1対1）と opposesIds（多対立）の両方を考慮する。
+ * 意見群を「対立クラスタ（対立ペア）」と「対立なし（single）」に分割する。
+ * 対立を無向グラフとみなし連結成分を求めるため、配列順に依存しない。
+ * 各クラスタの表示アンカー（左側）は、クラスタ内で最も多くの相手と対立する意見
+ * （同数なら配列で先に現れる意見）を選ぶ。
  */
 export function splitGroupsMulti(statements: Statement[]): StatementGroups {
+  const byId = new Map(statements.map((s) => [s.id, s]));
   const visited = new Set<string>();
   const pairRows: PairRow[] = [];
   const singles: Statement[] = [];
-  for (const s of statements) {
-    if (visited.has(s.id)) continue;
-    const oppIds = [...s.opposesIds, ...(s.opposes ? [s.opposes] : [])];
-    const others = oppIds
-      .map((id) => statements.find((x) => x.id === id))
-      .filter((x): x is Statement => !!x && !visited.has(x.id));
-    if (others.length > 0) {
-      pairRows.push({ a: s, others });
-      visited.add(s.id);
-      for (const o of others) visited.add(o.id);
+
+  for (const start of statements) {
+    if (visited.has(start.id)) continue;
+
+    // start を含む連結成分（クラスタ）を幅優先で収集する。
+    const clusterIds = new Set<string>([start.id]);
+    const queue = [start];
+    while (queue.length > 0) {
+      const cur = queue.shift() as Statement;
+      for (const oid of cur.opposesIds) {
+        if (!clusterIds.has(oid) && byId.has(oid)) {
+          clusterIds.add(oid);
+          queue.push(byId.get(oid) as Statement);
+        }
+      }
+    }
+    for (const id of clusterIds) visited.add(id);
+
+    if (clusterIds.size === 1) {
+      singles.push(start);
       continue;
     }
-    singles.push(s);
-    visited.add(s.id);
+
+    // クラスタ内メンバーを配列順で並べ、対立次数が最大のものをアンカーにする。
+    const members = statements.filter((s) => clusterIds.has(s.id));
+    const degreeInCluster = (s: Statement) =>
+      s.opposesIds.filter((id) => clusterIds.has(id)).length;
+    let anchor = members[0];
+    for (const m of members) {
+      if (degreeInCluster(m) > degreeInCluster(anchor)) anchor = m;
+    }
+    const others = members.filter((s) => s.id !== anchor.id);
+    pairRows.push({ a: anchor, others });
   }
+
   return { pairRows, singles, hasSingles: singles.length > 0 };
 }
 
@@ -245,7 +264,8 @@ export function mapStatementsDeep(topics: Topic[], fn: (s: Statement) => Stateme
 // ---- 変更操作 ---------------------------------------------------------------
 
 /**
- * 指定した論点に意見を追加する。opposesId 指定時は相手意見と双方向に対立を張る。
+ * 指定した論点に意見を追加する。opposesId 指定時は相手意見と対称に対立を張る
+ * （相手が既に別の意見と対立していても上書きせず追加する）。
  * rationaleText があれば根拠を1件付ける。
  */
 export function addStatement(
@@ -263,19 +283,18 @@ export function addStatement(
   const newStatement: Statement = {
     id: sid,
     text: body,
-    opposes: opposesId || null,
-    opposesIds: [],
+    opposesIds: opposesId ? [opposesId] : [],
     rationales,
   };
   return updateContainer(topics, containerId, (c) => {
     const statements = c.statements.map((st) =>
-      st.id === opposesId ? { ...st, opposes: sid } : st,
+      st.id === opposesId ? { ...st, opposesIds: [...st.opposesIds, sid] } : st,
     );
     return { ...c, statements: [...statements, newStatement] };
   });
 }
 
-/** 指定した意見に対して対立する意見を、同じ論点内に追加する。 */
+/** 指定した意見に対して対立する意見を、同じ論点内に対称な対立関係で追加する。 */
 export function addConflictStatement(topics: Topic[], statementId: string, text: string): Topic[] {
   const body = text.trim();
   if (!body) return topics;
@@ -283,13 +302,14 @@ export function addConflictStatement(topics: Topic[], statementId: string, text:
   const newStatement: Statement = {
     id: sid,
     text: body,
-    opposes: statementId,
-    opposesIds: [],
+    opposesIds: [statementId],
     rationales: [],
   };
   return mapContainersDeep(topics, (c) => {
     if (!c.statements.some((x) => x.id === statementId)) return c;
-    const statements = c.statements.map((x) => (x.id === statementId ? { ...x, opposes: sid } : x));
+    const statements = c.statements.map((x) =>
+      x.id === statementId ? { ...x, opposesIds: [...x.opposesIds, sid] } : x,
+    );
     return { ...c, statements: [...statements, newStatement] };
   });
 }
@@ -345,4 +365,24 @@ export function deleteRationale(
       ? { ...s, rationales: s.rationales.filter((r) => r.id !== rationaleId) }
       : s,
   );
+}
+
+// ---- 正規化（永続データ読み込み時の防御）-----------------------------------
+
+/**
+ * 永続化された（あるいは古いスキーマの）データを安全な形へ整える。
+ * opposesIds / rationales / subtopics の欠落を埋め、後続の純粋関数が例外を出さないようにする。
+ */
+export function normalizeTopics(topics: Topic[]): Topic[] {
+  return topics.map((t) => ({
+    id: t.id,
+    name: t.name,
+    statements: (t.statements ?? []).map((s) => ({
+      id: s.id,
+      text: s.text,
+      opposesIds: Array.isArray(s.opposesIds) ? s.opposesIds : [],
+      rationales: Array.isArray(s.rationales) ? s.rationales : [],
+    })),
+    subtopics: normalizeTopics(t.subtopics ?? []),
+  }));
 }

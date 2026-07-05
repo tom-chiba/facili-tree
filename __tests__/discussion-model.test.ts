@@ -4,12 +4,13 @@ import {
   addRationale,
   addStatement,
   addSubtopic,
+  computeGroupModel,
   deleteRationale,
   editRationale,
   findContainer,
   flattenAxisView,
   flattenTopicOptions,
-  computeGroupModel,
+  normalizeTopics,
   optsFor,
   seedTopics,
   splitGroupsMulti,
@@ -17,7 +18,7 @@ import {
 import type { Statement, Topic } from "@/lib/discussion/types";
 
 function stmt(id: string, text: string, over: Partial<Statement> = {}): Statement {
-  return { id, text, opposes: null, opposesIds: [], rationales: [], ...over };
+  return { id, text, opposesIds: [], rationales: [], ...over };
 }
 
 function topic(
@@ -29,6 +30,13 @@ function topic(
   return { id, name, statements, subtopics };
 }
 
+/** 対称な対立関係を張った意見ペアを生成する。 */
+function linkedPair(): [Statement, Statement] {
+  const a = stmt("a", "A", { opposesIds: ["b"] });
+  const b = stmt("b", "B", { opposesIds: ["a"] });
+  return [a, b];
+}
+
 describe("splitGroupsMulti", () => {
   test("対立なしの意見は single になる", () => {
     const g = splitGroupsMulti([stmt("a", "A"), stmt("b", "B")]);
@@ -37,26 +45,36 @@ describe("splitGroupsMulti", () => {
     expect(g.hasSingles).toBe(true);
   });
 
-  test("1対1の対立はペアになる（重複しない）", () => {
-    const g = splitGroupsMulti([
-      stmt("a", "A", { opposes: "b" }),
-      stmt("b", "B", { opposes: "a" }),
-    ]);
+  test("対称な1対1の対立はペアになる（重複しない）", () => {
+    const g = splitGroupsMulti(linkedPair());
     expect(g.pairRows).toHaveLength(1);
     expect(g.pairRows[0].a.id).toBe("a");
     expect(g.pairRows[0].others.map((s) => s.id)).toEqual(["b"]);
     expect(g.singles).toHaveLength(0);
   });
 
-  test("多対立（opposesIds）はアンカー1件に複数 others が付く", () => {
+  test("多対立はクラスタ内で最多対立の意見がアンカーになる", () => {
     const g = splitGroupsMulti([
       stmt("a", "A", { opposesIds: ["b", "c"] }),
-      stmt("b", "B", { opposes: "a" }),
-      stmt("c", "C", { opposes: "a" }),
+      stmt("b", "B", { opposesIds: ["a"] }),
+      stmt("c", "C", { opposesIds: ["a"] }),
     ]);
     expect(g.pairRows).toHaveLength(1);
     expect(g.pairRows[0].a.id).toBe("a");
     expect(g.pairRows[0].others.map((s) => s.id)).toEqual(["b", "c"]);
+  });
+
+  test("グルーピングは配列順に依存しない（アンカーが後方でも同じクラスタ）", () => {
+    // アンカー a を配列の最後に置く
+    const g = splitGroupsMulti([
+      stmt("b", "B", { opposesIds: ["a"] }),
+      stmt("c", "C", { opposesIds: ["a"] }),
+      stmt("a", "A", { opposesIds: ["b", "c"] }),
+    ]);
+    expect(g.pairRows).toHaveLength(1);
+    expect(g.pairRows[0].a.id).toBe("a");
+    expect(g.pairRows[0].others.map((s) => s.id).sort()).toEqual(["b", "c"]);
+    expect(g.singles).toHaveLength(0);
   });
 });
 
@@ -75,14 +93,39 @@ describe("addStatement", () => {
     expect(addStatement(before, "t1", "   ", null)).toBe(before);
   });
 
-  test("opposes 指定時は相手意見と双方向に対立を張る", () => {
+  test("opposes 指定時は相手意見と対称に対立を張る", () => {
     const before = [topic("t1", "論点1", [stmt("s1", "既存")])];
     const after = addStatement(before, "t1", "反対意見", "s1");
     const c = findContainer(after, "t1")!;
     const existing = c.statements.find((s) => s.id === "s1")!;
     const added = c.statements.find((s) => s.text === "反対意見")!;
-    expect(existing.opposes).toBe(added.id);
-    expect(added.opposes).toBe("s1");
+    expect(existing.opposesIds).toContain(added.id);
+    expect(added.opposesIds).toContain("s1");
+  });
+
+  test("【回帰】既にペアの意見に2つ目の対立を足しても最初の対立は壊れない", () => {
+    // s1 ↔ s2 が既にペア
+    const before = [
+      topic("t1", "論点1", [
+        stmt("s1", "S1", { opposesIds: ["s2"] }),
+        stmt("s2", "S2", { opposesIds: ["s1"] }),
+      ]),
+    ];
+    // s1 に対する2つ目の対立意見 X を追加
+    const after = addStatement(before, "t1", "X", "s1");
+    const c = findContainer(after, "t1")!;
+    const s1 = c.statements.find((s) => s.id === "s1")!;
+    const s2 = c.statements.find((s) => s.id === "s2")!;
+    const x = c.statements.find((s) => s.text === "X")!;
+    // s1 は s2 と X の両方に対立、s2 の対立(s1)は保持される
+    expect(s1.opposesIds).toEqual(expect.arrayContaining(["s2", x.id]));
+    expect(s2.opposesIds).toContain("s1");
+    // 表示上も s2 が single に落ちず、1つのクラスタ（アンカー s1・相手2件）になる
+    const g = splitGroupsMulti(c.statements);
+    expect(g.pairRows).toHaveLength(1);
+    expect(g.pairRows[0].a.id).toBe("s1");
+    expect(g.pairRows[0].others.map((s) => s.id).sort()).toEqual([x.id, "s2"].sort());
+    expect(g.singles).toHaveLength(0);
   });
 
   test("入れ子の子論点にも追加できる", () => {
@@ -100,13 +143,25 @@ describe("addStatement", () => {
 });
 
 describe("addConflictStatement", () => {
-  test("単体意見に対立意見を追加し双方向に結ぶ", () => {
+  test("単体意見に対立意見を追加し対称に結ぶ", () => {
     const before = [topic("t1", "論点1", [stmt("s1", "元意見")])];
     const after = addConflictStatement(before, "s1", "対立意見");
     const c = findContainer(after, "t1")!;
     const added = c.statements.find((s) => s.text === "対立意見")!;
-    expect(c.statements.find((s) => s.id === "s1")!.opposes).toBe(added.id);
-    expect(added.opposes).toBe("s1");
+    expect(c.statements.find((s) => s.id === "s1")!.opposesIds).toContain(added.id);
+    expect(added.opposesIds).toContain("s1");
+  });
+
+  test("空文字は追加しない", () => {
+    const before = [topic("t1", "論点1", [stmt("s1", "元意見")])];
+    expect(addConflictStatement(before, "s1", "  ")).toBe(before);
+  });
+
+  test("入れ子の子論点内の意見にも対立を追加できる（イミュータブル）", () => {
+    const before = [topic("t1", "親", [], [topic("t1a", "子", [stmt("s1", "元")])])];
+    const after = addConflictStatement(before, "s1", "対立");
+    expect(findContainer(after, "t1a")!.statements).toHaveLength(2);
+    expect(findContainer(before, "t1a")!.statements).toHaveLength(1);
   });
 });
 
@@ -116,6 +171,7 @@ describe("addSubtopic", () => {
     const after = addSubtopic(before, "t1", "新しい子論点");
     expect(findContainer(after, "t1")!.subtopics).toHaveLength(1);
     expect(findContainer(after, "t1")!.subtopics[0].name).toBe("新しい子論点");
+    expect(findContainer(before, "t1")!.subtopics).toHaveLength(0);
   });
 
   test("空名は追加しない", () => {
@@ -129,10 +185,15 @@ describe("rationale 操作", () => {
     topic("t1", "論点1", [stmt("s1", "意見", { rationales: [{ id: "r1", text: "根拠1" }] })]),
   ];
 
-  test("追加", () => {
+  test("追加（イミュータブル）", () => {
     const after = addRationale(base, "s1", "根拠2");
     const s = findContainer(after, "t1")!.statements[0];
     expect(s.rationales.map((r) => r.text)).toEqual(["根拠1", "根拠2"]);
+    expect(findContainer(base, "t1")!.statements[0].rationales).toHaveLength(1);
+  });
+
+  test("空文字の追加は無視", () => {
+    expect(addRationale(base, "s1", "  ")).toBe(base);
   });
 
   test("編集", () => {
@@ -160,10 +221,17 @@ describe("表示用ユーティリティ", () => {
 
   test("optsFor は論点内の意見を短縮テキストで返す", () => {
     const long = "あ".repeat(30);
-    const topics = [topic("t1", "論点1", [stmt("s1", long)])];
+    const topics = [topic("t1", "論点1", [stmt("s1", long), stmt("s2", "短い")])];
     const opts = optsFor(topics, "t1");
-    expect(opts).toHaveLength(1);
+    expect(opts.map((o) => o.id)).toEqual(["s1", "s2"]);
     expect(opts[0].text.endsWith("…")).toBe(true);
+    expect(opts[1].text).toBe("短い");
+  });
+
+  test("optsFor は topicId が null や不明なら空配列", () => {
+    const topics = [topic("t1", "論点1", [stmt("s1", "x")])];
+    expect(optsFor(topics, null)).toEqual([]);
+    expect(optsFor(topics, "nope")).toEqual([]);
   });
 
   test("flattenAxisView は深さ情報を付与する", () => {
@@ -176,13 +244,28 @@ describe("表示用ユーティリティ", () => {
   });
 });
 
+describe("normalizeTopics", () => {
+  test("欠落した opposesIds / rationales / subtopics を補う", () => {
+    const broken = [
+      { id: "t1", name: "論点1", statements: [{ id: "s1", text: "x" }] },
+    ] as unknown as Topic[];
+    const normalized = normalizeTopics(broken);
+    expect(normalized[0].statements[0].opposesIds).toEqual([]);
+    expect(normalized[0].statements[0].rationales).toEqual([]);
+    expect(normalized[0].subtopics).toEqual([]);
+  });
+});
+
 describe("seedTopics", () => {
-  test("3つの論点と入れ子・対立ペアを含む", () => {
+  test("3つの論点と入れ子・対立ペア・多対立を含む", () => {
     const topics = seedTopics();
     expect(topics).toHaveLength(3);
     expect(topics[0].subtopics).toHaveLength(1);
     const grouped = computeGroupModel(topics);
     // 座席のルールには対立ペアがある
     expect(grouped[0].pairRows.length).toBeGreaterThan(0);
+    // コスト論点には多対立（アンカー1件に相手2件以上）がある
+    const cost = grouped[1];
+    expect(cost.pairRows.some((r) => r.others.length >= 2)).toBe(true);
   });
 });

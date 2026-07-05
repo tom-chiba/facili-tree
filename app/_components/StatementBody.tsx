@@ -2,44 +2,20 @@
 
 import { useState } from "react";
 import type { Statement } from "@/lib/discussion/types";
-
-// デザイン（2c 対立ボード）由来のスタイル定数。
-const LINK = "oklch(45% 0.12 265)";
-const CONFLICT = "oklch(58% 0.17 25)";
-const SAVE_BG = "oklch(45% 0.10 150)";
-const RATIONALE_LABEL_BG = "oklch(94% 0.02 265)";
-const RATIONALE_LABEL_FG = "oklch(40% 0.08 265)";
-
-const saveBtnStyle: React.CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 700,
-  padding: "3px 8px",
-  borderRadius: 5,
-  border: "none",
-  background: SAVE_BG,
-  color: "#fff",
-  cursor: "pointer",
-};
-
-const cancelBtnStyle: React.CSSProperties = {
-  fontSize: 9.5,
-  fontWeight: 600,
-  padding: "3px 8px",
-  borderRadius: 5,
-  border: "1px solid #e5e2da",
-  background: "#fff",
-  color: "#74716a",
-  cursor: "pointer",
-};
+import { cancelBtnStyle, colors, saveBtnStyle } from "./ui";
 
 const editInputStyle: React.CSSProperties = {
   flex: 1,
   fontSize: 10,
   padding: "4px 7px",
-  border: `1px solid ${CONFLICT}`,
+  border: `1px solid ${colors.conflict}`,
   borderRadius: 5,
-  color: "#3a3833",
+  color: colors.text,
 };
+
+// StatementBody 内の保存/取消は小サイズ（9.5px）。
+const smallSave = saveBtnStyle;
+const smallCancel: React.CSSProperties = { ...cancelBtnStyle, fontSize: 9.5, padding: "3px 8px" };
 
 type Props = {
   statement: Statement;
@@ -93,15 +69,15 @@ export function StatementBody({
 
   return (
     <>
-      <div style={{ fontSize: 11, lineHeight: 1.4, color: "#3a3833" }}>{statement.text}</div>
+      <div style={{ fontSize: 11, lineHeight: 1.4, color: colors.text }}>{statement.text}</div>
 
       {hasRationales && (
         <>
           <div style={{ margin: "6px 0 4px" }}>
             <span
               style={{
-                background: RATIONALE_LABEL_BG,
-                color: RATIONALE_LABEL_FG,
+                background: colors.rationaleLabelBg,
+                color: colors.rationaleLabelFg,
                 fontSize: 9,
                 fontWeight: 700,
                 padding: "2px 7px",
@@ -121,10 +97,10 @@ export function StatementBody({
                     onChange={(e) => setDraft(e.target.value)}
                     aria-label="根拠を編集"
                   />
-                  <button type="button" style={saveBtnStyle} onClick={save}>
+                  <button type="button" style={smallSave} onClick={save}>
                     保存
                   </button>
-                  <button type="button" style={cancelBtnStyle} onClick={cancel}>
+                  <button type="button" style={smallCancel} onClick={cancel}>
                     取消
                   </button>
                 </div>
@@ -137,7 +113,7 @@ export function StatementBody({
                     gap: 6,
                     fontSize: 10,
                     lineHeight: 1.4,
-                    color: "#74716a",
+                    color: colors.muted,
                   }}
                 >
                   <button
@@ -186,10 +162,10 @@ export function StatementBody({
             onChange={(e) => setDraft(e.target.value)}
             aria-label="根拠を入力"
           />
-          <button type="button" style={saveBtnStyle} onClick={save}>
+          <button type="button" style={smallSave} onClick={save}>
             保存
           </button>
-          <button type="button" style={cancelBtnStyle} onClick={cancel}>
+          <button type="button" style={smallCancel} onClick={cancel}>
             取消
           </button>
         </div>
@@ -200,7 +176,7 @@ export function StatementBody({
             display: "block",
             marginTop: 4,
             fontSize: 9.5,
-            color: LINK,
+            color: colors.link,
             cursor: "pointer",
             border: "none",
             background: "none",

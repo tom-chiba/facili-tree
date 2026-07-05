@@ -9,13 +9,12 @@ export type Rationale = {
 
 /**
  * 意見（Statement）。
- * - opposes: 1対1の対立相手の Statement id（UI から追加した対立は双方向にこれを張る）
- * - opposesIds: 1件が複数意見と対立する場合のアンカー側が持つ相手 id 群（主にシードデータ由来）
+ * - opposesIds: 対立する相手 Statement の id 群。対称に張る（A が B と対立するなら
+ *   A.opposesIds に B、B.opposesIds に A の双方が入る）。1件が複数と対立する多対立も表現できる。
  */
 export type Statement = {
   id: string;
   text: string;
-  opposes: string | null;
   opposesIds: string[];
   rationales: Rationale[];
 };

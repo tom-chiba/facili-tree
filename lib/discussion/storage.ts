@@ -2,7 +2,7 @@
 
 import type { Topic } from "./types";
 
-const STORAGE_KEY = "facili-tree:discussion:v1";
+const STORAGE_KEY = "facili-tree:discussion:v2";
 
 /**
  * 永続化された議論データを読み込む。
