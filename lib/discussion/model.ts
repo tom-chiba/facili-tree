@@ -20,6 +20,14 @@ export function emptyDiscussion(): Discussion {
   return { title: "", participants: [], topics: [] };
 }
 
+/**
+ * 議論のタイトルを設定する（前後の空白は除去）。
+ * 書き込み時の正規化を、他フィールドの add 系ヘルパと同じくドメイン層に集約するための関数。
+ */
+export function renameDiscussion(discussion: Discussion, title: string): Discussion {
+  return { ...discussion, title: title.trim() };
+}
+
 // ---- グループ化（対立ペア / 対立なし）--------------------------------------
 
 /** 対立ペアの1行。a がアンカー、others が a と対立する意見群。 */

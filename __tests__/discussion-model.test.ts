@@ -17,6 +17,7 @@ import {
   normalizeTopics,
   opposesOptionsOf,
   removeParticipant,
+  renameDiscussion,
   splitGroupsMulti,
 } from "@/lib/discussion/model";
 import type { Participant, Statement, Topic } from "@/lib/discussion/types";
@@ -387,6 +388,21 @@ describe("参加者操作", () => {
 describe("emptyDiscussion", () => {
   test("空のタイトル・参加者・論点を返す", () => {
     expect(emptyDiscussion()).toEqual({ title: "", participants: [], topics: [] });
+  });
+});
+
+describe("renameDiscussion", () => {
+  const base = { title: "旧", participants: [{ id: "p1", name: "田中" }], topics: [] };
+
+  test("タイトルを差し替え、前後の空白を除去する（イミュータブル・他フィールドは保持）", () => {
+    const after = renameDiscussion(base, "  新しいタイトル  ");
+    expect(after.title).toBe("新しいタイトル");
+    expect(after.participants).toBe(base.participants);
+    expect(base.title).toBe("旧");
+  });
+
+  test("空白のみは空文字（無題扱い）になる", () => {
+    expect(renameDiscussion(base, "   ").title).toBe("");
   });
 });
 

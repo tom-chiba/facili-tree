@@ -17,6 +17,7 @@ import {
   normalizeDiscussion,
   opposesOptionsOf,
   removeParticipant,
+  renameDiscussion,
 } from "@/lib/discussion/model";
 import { loadDiscussion, saveDiscussion } from "@/lib/discussion/storage";
 import type { Discussion, Topic } from "@/lib/discussion/types";
@@ -93,10 +94,9 @@ export function ConflictBoard() {
     updateTopics((t) => addConflictStatement(t, statementId, text));
   }
 
-  // title は対応するドメイン追加関数を持たないスカラーのため、書き込み時はここで trim する
-  // （読み込み時は normalizeDiscussion が同様に trim する）。
+  // 書き込み時の正規化（trim）はドメインの renameDiscussion に集約（読み込み時は normalizeDiscussion）。
   function handleChangeTitle(title: string) {
-    updateDiscussion((d) => ({ ...d, title: title.trim() }));
+    updateDiscussion((d) => renameDiscussion(d, title));
   }
   function handleAddParticipant(name: string) {
     updateDiscussion((d) => ({ ...d, participants: addParticipant(d.participants, name) }));
