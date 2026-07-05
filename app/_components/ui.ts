@@ -15,6 +15,20 @@ export const colors = {
   ink: "#23221f",
 } as const;
 
+/** 参加者アバターの背景色パレット。参加者の並び順（index）で循環的に割り当てる。 */
+export const participantPalette = [
+  "oklch(58% 0.10 265)",
+  "oklch(58% 0.12 150)",
+  "oklch(58% 0.13 35)",
+  "oklch(60% 0.11 85)",
+  "oklch(55% 0.06 265)",
+] as const;
+
+/** index に対応するアバター背景色を返す（パレットを循環）。 */
+export function participantColor(index: number): string {
+  return participantPalette[index % participantPalette.length];
+}
+
 /** テキストリンク風のボタン（+ 意見を追加 など）。 */
 export const linkBtnStyle: CSSProperties = {
   fontSize: 10,

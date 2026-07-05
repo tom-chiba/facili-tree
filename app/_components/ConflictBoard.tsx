@@ -3,33 +3,28 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   addConflictStatement,
+  addParticipant,
   addRationale,
   addStatement,
   addSubtopic,
+  addTopic,
   computeGroupModel,
   deleteRationale,
   editRationale,
+  emptyDiscussion,
   flattenAxisView,
   flattenTopicOptions,
-  normalizeTopics,
+  normalizeDiscussion,
   opposesOptionsOf,
-  seedTopics,
+  removeParticipant,
+  renameDiscussion,
 } from "@/lib/discussion/model";
-import { loadTopics, saveTopics } from "@/lib/discussion/storage";
-import type { Topic } from "@/lib/discussion/types";
+import { loadDiscussion, saveDiscussion } from "@/lib/discussion/storage";
+import type { Discussion, Topic } from "@/lib/discussion/types";
+import { DiscussionHeader } from "./DiscussionHeader";
 import { OpposesSelect } from "./OpposesSelect";
 import { type RationaleHandlers, TopicNode } from "./TopicNode";
-import { colors, darkBtnStyle } from "./ui";
-
-const DISCUSSION_TITLE = "新オフィス フリーアドレス導入 検討会";
-
-const PARTICIPANTS = [
-  { initial: "A", bg: "oklch(58% 0.10 265)" },
-  { initial: "B", bg: "oklch(58% 0.12 150)" },
-  { initial: "C", bg: "oklch(58% 0.13 35)" },
-  { initial: "D", bg: "oklch(60% 0.11 85)" },
-  { initial: "E", bg: "oklch(55% 0.06 265)" },
-];
+import { cancelBtnStyle, colors, darkBtnStyle, inlineInputStyle, linkBtnStyle } from "./ui";
 
 const footerSelectStyle: React.CSSProperties = {
   fontSize: 12,
@@ -44,20 +39,23 @@ type Form = { topic: string; text: string; opposes: string; rationale: string };
 
 export function ConflictBoard() {
   // null = 未マウント（サーバー描画と一致させ、ハイドレーション不一致を避ける）。
-  const [topics, setTopics] = useState<Topic[] | null>(null);
+  const [discussion, setDiscussion] = useState<Discussion | null>(null);
   const [form, setForm] = useState<Form>({ topic: "", text: "", opposes: "", rationale: "" });
+  const [addingTopic, setAddingTopic] = useState(false);
+  const [topicDraft, setTopicDraft] = useState("");
 
-  // マウント後に永続データを読み込む。生値を検証・正規化し、無効／空ならシードにフォールバックする。
+  // マウント後に永続データを読み込む。生値を検証・正規化し、無ければ空の議論から始める。
   useEffect(() => {
-    const loaded = normalizeTopics(loadTopics());
-    setTopics(loaded.length > 0 ? loaded : seedTopics());
+    const loaded = loadDiscussion();
+    setDiscussion(loaded === null ? emptyDiscussion() : normalizeDiscussion(loaded));
   }, []);
 
   // 変更のたびに永続化する。
   useEffect(() => {
-    if (topics) saveTopics(topics);
-  }, [topics]);
+    if (discussion) saveDiscussion(discussion);
+  }, [discussion]);
 
+  const topics = discussion?.topics ?? null;
   const flatNodes = useMemo(
     () => (topics ? flattenAxisView(computeGroupModel(topics)) : []),
     [topics],
@@ -71,35 +69,61 @@ export function ConflictBoard() {
     return node ? opposesOptionsOf(node) : [];
   }, [nodeById, currentTopicId]);
 
+  // ---- 状態更新はすべてこの2ヘルパ経由（null ガードと不変更新を集約）----
+  function updateDiscussion(fn: (d: Discussion) => Discussion) {
+    setDiscussion((prev) => (prev ? fn(prev) : prev));
+  }
+  function updateTopics(fn: (topics: Topic[]) => Topic[]) {
+    updateDiscussion((d) => ({ ...d, topics: fn(d.topics) }));
+  }
+
   // ---- 変更ハンドラ（すべて model 経由でイミュータブル更新）----
   const rationaleHandlers: RationaleHandlers = {
-    onAddRationale: (sid, text) =>
-      setTopics((prev) => (prev ? addRationale(prev, sid, text) : prev)),
-    onEditRationale: (sid, rid, text) =>
-      setTopics((prev) => (prev ? editRationale(prev, sid, rid, text) : prev)),
-    onDeleteRationale: (sid, rid) =>
-      setTopics((prev) => (prev ? deleteRationale(prev, sid, rid) : prev)),
+    onAddRationale: (sid, text) => updateTopics((t) => addRationale(t, sid, text)),
+    onEditRationale: (sid, rid, text) => updateTopics((t) => editRationale(t, sid, rid, text)),
+    onDeleteRationale: (sid, rid) => updateTopics((t) => deleteRationale(t, sid, rid)),
   };
 
   function handleAddStatement(containerId: string, text: string, opposesId: string | null) {
-    setTopics((prev) => (prev ? addStatement(prev, containerId, text, opposesId) : prev));
+    updateTopics((t) => addStatement(t, containerId, text, opposesId));
   }
   function handleAddSubtopic(containerId: string, name: string) {
-    setTopics((prev) => (prev ? addSubtopic(prev, containerId, name) : prev));
+    updateTopics((t) => addSubtopic(t, containerId, name));
   }
   function handleAddConflict(statementId: string, text: string) {
-    setTopics((prev) => (prev ? addConflictStatement(prev, statementId, text) : prev));
+    updateTopics((t) => addConflictStatement(t, statementId, text));
+  }
+
+  // 書き込み時の正規化（trim）はドメインの renameDiscussion に集約（読み込み時は normalizeDiscussion）。
+  function handleChangeTitle(title: string) {
+    updateDiscussion((d) => renameDiscussion(d, title));
+  }
+  function handleAddParticipant(name: string) {
+    updateDiscussion((d) => ({ ...d, participants: addParticipant(d.participants, name) }));
+  }
+  function handleRemoveParticipant(id: string) {
+    updateDiscussion((d) => ({ ...d, participants: removeParticipant(d.participants, id) }));
+  }
+
+  function submitTopic() {
+    updateTopics((t) => addTopic(t, topicDraft));
+    setTopicDraft("");
+    setAddingTopic(false);
+  }
+  function cancelTopic() {
+    setAddingTopic(false);
+    setTopicDraft("");
   }
 
   function addFromFooter() {
     if (!currentTopicId) return;
-    setTopics((prev) =>
-      prev
-        ? addStatement(prev, currentTopicId, form.text, form.opposes || null, form.rationale)
-        : prev,
+    updateTopics((t) =>
+      addStatement(t, currentTopicId, form.text, form.opposes || null, form.rationale),
     );
     setForm((f) => ({ topic: f.topic, text: "", opposes: "", rationale: "" }));
   }
+
+  const hasTopics = topics !== null && topics.length > 0;
 
   return (
     <div
@@ -124,55 +148,15 @@ export function ConflictBoard() {
           alignSelf: "flex-start",
         }}
       >
-        {/* ヘッダー */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 22px",
-            borderBottom: `1px solid ${colors.border}`,
-            background: "#fff",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: "oklch(58% 0.15 35)",
-              }}
-            />
-            <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: colors.ink }}>
-              {DISCUSSION_TITLE}
-            </h1>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {PARTICIPANTS.map((p) => (
-              <div
-                key={p.initial}
-                aria-label={`参加者 ${p.initial}`}
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: "50%",
-                  background: p.bg,
-                  color: "#fff",
-                  fontSize: 10,
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "2px solid #fff",
-                  marginLeft: -6,
-                }}
-              >
-                {p.initial}
-              </div>
-            ))}
-          </div>
-        </div>
+        {discussion !== null && (
+          <DiscussionHeader
+            title={discussion.title}
+            participants={discussion.participants}
+            onChangeTitle={handleChangeTitle}
+            onAddParticipant={handleAddParticipant}
+            onRemoveParticipant={handleRemoveParticipant}
+          />
+        )}
 
         {/* ボード本体 */}
         <div
@@ -188,25 +172,62 @@ export function ConflictBoard() {
             gap: 20,
           }}
         >
-          {topics === null ? (
+          {discussion === null ? (
             <div style={{ color: "#9b988f", fontSize: 12.5 }}>読み込み中…</div>
           ) : (
-            flatNodes.map((node) => (
-              <TopicNode
-                key={node.id}
-                node={node}
-                opposesOptions={opposesOptionsOf(node)}
-                onAddStatement={handleAddStatement}
-                onAddSubtopic={handleAddSubtopic}
-                onAddConflict={handleAddConflict}
-                rationaleHandlers={rationaleHandlers}
-              />
-            ))
+            <>
+              {!hasTopics && !addingTopic && (
+                <div style={{ color: "#9b988f", fontSize: 12.5, lineHeight: 1.6 }}>
+                  まだ論点がありません。「＋ 論点を追加」から議論の軸を作りましょう。
+                </div>
+              )}
+              {flatNodes.map((node) => (
+                <TopicNode
+                  key={node.id}
+                  node={node}
+                  opposesOptions={opposesOptionsOf(node)}
+                  onAddStatement={handleAddStatement}
+                  onAddSubtopic={handleAddSubtopic}
+                  onAddConflict={handleAddConflict}
+                  rationaleHandlers={rationaleHandlers}
+                />
+              ))}
+
+              {addingTopic ? (
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    aria-label="論点の名前を入力"
+                    style={{ ...inlineInputStyle, flex: "none", width: 220 }}
+                    placeholder="論点の名前…"
+                    value={topicDraft}
+                    onChange={(e) => setTopicDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submitTopic();
+                      if (e.key === "Escape") cancelTopic();
+                    }}
+                  />
+                  <button type="button" style={darkBtnStyle} onClick={submitTopic}>
+                    追加
+                  </button>
+                  <button type="button" style={cancelBtnStyle} onClick={cancelTopic}>
+                    取消
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  style={{ ...linkBtnStyle, fontSize: 11.5, fontWeight: 700 }}
+                  onClick={() => setAddingTopic(true)}
+                >
+                  ＋ 論点を追加
+                </button>
+              )}
+            </>
           )}
         </div>
 
-        {/* フッター（追加フォーム） */}
-        {topics !== null && (
+        {/* フッター（意見の追加フォーム）: 論点が1つ以上あるときのみ表示 */}
+        {hasTopics && (
           <>
             <div
               style={{
